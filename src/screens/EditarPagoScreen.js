@@ -6,11 +6,12 @@ import { useToast } from '../components/ToastProvider'
 import { crearEstilos, espaciado } from '../lib/theme'
 import { useTema } from '../lib/TemaContext'
 import useConfirmarSalida from '../lib/useConfirmarSalida'
+import { parsearFechaDB } from '../lib/fechas'
 
-export default function NuevoPagoScreen({ route, navigation }) {
+export default function EditarPagoScreen({ route, navigation }) {
   const { colors, tipografia, sombras } = useTema()
   const styles = usarEstilos(colors, tipografia, sombras)
-  const { clienteId, saldoPendiente } = route.params
+  const { pago } = route.params
   const mostrarToast = useToast()
   const [loading, setLoading] = useState(false)
   const [successModal, setSuccessModal] = useState(false)
@@ -18,12 +19,12 @@ export default function NuevoPagoScreen({ route, navigation }) {
   const [guardado, setGuardado] = useState(false)
   const salida = useConfirmarSalida(navigation, sucio && !guardado)
 
-  async function guardarPago(valores) {
+  async function guardarCambios(valores) {
     setLoading(true)
-    const { error } = await supabase.from('pagos').insert({
-      cliente_id: clienteId,
-      ...valores,
-    })
+    const { error } = await supabase
+      .from('pagos')
+      .update(valores)
+      .eq('id', pago.id)
     setLoading(false)
     if (error) mostrarToast(error.message)
     else {
@@ -54,8 +55,8 @@ export default function NuevoPagoScreen({ route, navigation }) {
 
         <SuccessModal
           visible={successModal}
-          titulo="¡Pago registrado!"
-          mensaje="El pago fue registrado correctamente."
+          titulo="¡Pago actualizado!"
+          mensaje="El pago fue modificado correctamente."
           onCerrar={() => {
             setSuccessModal(false)
             navigation.goBack()
@@ -63,11 +64,11 @@ export default function NuevoPagoScreen({ route, navigation }) {
         />
 
         <FormularioPago
-          saldoPendiente={saldoPendiente}
-          textoBoton="Registrar Pago"
+          inicial={{ ...pago, fecha: parsearFechaDB(pago.fecha_pago) }}
+          textoBoton="Guardar Cambios"
           loading={loading}
           onSucioChange={setSucio}
-          onGuardar={guardarPago}
+          onGuardar={guardarCambios}
         />
       </ScrollView>
     </KeyboardAvoidingView>

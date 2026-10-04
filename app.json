@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/logo.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/logo.png",
       "resizeMode": "contain",
@@ -19,13 +19,26 @@
         "foregroundImage": "./assets/logo.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.estudiojuridico.app"
+      "package": "com.estudiojuridico.app",
+      "softwareKeyboardLayoutMode": "pan"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/logo-pagina.png",
+      "bundler": "metro",
+      "output": "single"
     },
     "plugins": [
-      "expo-sharing"
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf"
+          ]
+        }
+      ],
+      "expo-sharing",
+      "expo-status-bar",
+      "@react-native-community/datetimepicker"
     ],
     "extra": {
       "eas": {

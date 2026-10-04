@@ -1,89 +1,104 @@
 import { useState } from 'react'
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView } from 'react-native'
+import { ScrollView, KeyboardAvoidingView, Platform } from 'react-native'
 import { supabase } from '../lib/supabase'
-
-const ESTADOS = ['Activo', 'En espera', 'Cerrado']
+import { ConfirmModal, FormularioCliente, SuccessModal } from '../components'
+import { useToast } from '../components/ToastProvider'
+import { crearEstilos, espaciado } from '../lib/theme'
+import { useTema } from '../lib/TemaContext'
+import useConfirmarSalida from '../lib/useConfirmarSalida'
 
 export default function NuevoClienteScreen({ navigation }) {
-  const [nombre, setNombre] = useState('')
-  const [telefono, setTelefono] = useState('')
-  const [caso, setCaso] = useState('')
-  const [monto, setMonto] = useState('')
-  const [estado, setEstado] = useState('Activo')
+  const { colors, tipografia, sombras } = useTema()
+  const styles = usarEstilos(colors, tipografia, sombras)
+  const mostrarToast = useToast()
   const [loading, setLoading] = useState(false)
+  const [successModal, setSuccessModal] = useState(false)
+  const [sucio, setSucio] = useState(false)
+  const [guardado, setGuardado] = useState(false)
+  const salida = useConfirmarSalida(navigation, sucio && !guardado)
 
-  async function guardarCliente() {
-    if (!nombre || !monto) {
-      Alert.alert('Error', 'El nombre y el monto son obligatorios')
-      return
-    }
+  async function guardarCliente(valores) {
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
+
+    const { data: perfil, error: errorPerfil } = await supabase
+      .from('profiles')
+      .select('limite_clientes')
+      .eq('id', user.id)
+      .single()
+
+    const { data: clientesData, error: errorClientes } = await supabase
+      .from('clientes')
+      .select('id')
+      .eq('abogado_id', user.id)
+
+    if (errorPerfil || errorClientes || !perfil || !clientesData) {
+      setLoading(false)
+      mostrarToast('No se pudo verificar el límite de tu plan. Intentá de nuevo.')
+      return
+    }
+
+    if (clientesData.length >= perfil.limite_clientes) {
+      setLoading(false)
+      mostrarToast(`Alcanzaste el límite de ${perfil.limite_clientes} clientes de tu plan.`)
+      return
+    }
+
     const { error } = await supabase.from('clientes').insert({
       abogado_id: user.id,
-      nombre,
-      telefono,
-      descripcion_caso: caso,
-      monto_total: parseFloat(monto),
-      estado,
+      ...valores,
     })
     setLoading(false)
-    if (error) Alert.alert('Error', error.message)
+    if (error) mostrarToast(error.message)
     else {
-      Alert.alert('Éxito', 'Cliente registrado correctamente')
-      navigation.goBack()
+      setGuardado(true)
+      setSuccessModal(true)
     }
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ padding: 24 }}>
-      <Text style={styles.label}>Nombre completo *</Text>
-      <TextInput style={styles.input} value={nombre} onChangeText={setNombre} placeholder="Ej: Juan Pérez" />
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <ScrollView
+        contentContainerStyle={styles.contenido}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+      >
+        <ConfirmModal
+          visible={salida.visible}
+          titulo="Descartar cambios"
+          mensaje="Tenés cambios sin guardar. ¿Querés salir y perderlos?"
+          textoBoton="Sí, salir"
+          textoCancelar="Seguir editando"
+          onConfirmar={salida.confirmar}
+          onCancelar={salida.cancelar}
+        />
 
-      <Text style={styles.label}>Teléfono</Text>
-      <TextInput style={styles.input} value={telefono} onChangeText={setTelefono} placeholder="Ej: 70012345" keyboardType="phone-pad" />
+        <SuccessModal
+          visible={successModal}
+          titulo="¡Cliente registrado!"
+          mensaje="El cliente fue agregado correctamente."
+          onCerrar={() => {
+            setSuccessModal(false)
+            navigation.goBack()
+          }}
+        />
 
-      <Text style={styles.label}>Descripción del caso</Text>
-      <TextInput
-        style={[styles.input, { height: 100, textAlignVertical: 'top' }]}
-        value={caso}
-        onChangeText={setCaso}
-        placeholder="Describe brevemente el caso..."
-        multiline
-      />
-
-      <Text style={styles.label}>Monto del servicio (Bs.) *</Text>
-      <TextInput style={styles.input} value={monto} onChangeText={setMonto} placeholder="Ej: 1500" keyboardType="numeric" />
-
-      <Text style={styles.label}>Estado del caso</Text>
-      <View style={styles.estadoContainer}>
-        {ESTADOS.map((e) => (
-          <TouchableOpacity
-            key={e}
-            style={[styles.estadoBtn, estado === e && styles.estadoBtnActivo]}
-            onPress={() => setEstado(e)}
-          >
-            <Text style={[styles.estadoText, estado === e && styles.estadoTextActivo]}>{e}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <TouchableOpacity style={styles.button} onPress={guardarCliente} disabled={loading}>
-        <Text style={styles.buttonText}>{loading ? 'Guardando...' : 'Registrar Cliente'}</Text>
-      </TouchableOpacity>
-    </ScrollView>
+        <FormularioCliente
+          textoBoton="Registrar Cliente"
+          loading={loading}
+          onSucioChange={setSucio}
+          onGuardar={guardarCliente}
+        />
+      </ScrollView>
+    </KeyboardAvoidingView>
   )
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f5' },
-  label: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 6, marginTop: 12 },
-  input: { backgroundColor: '#fff', padding: 14, borderRadius: 8, borderWidth: 1, borderColor: '#ddd', fontSize: 15 },
-  estadoContainer: { flexDirection: 'row', gap: 10, marginTop: 4 },
-  estadoBtn: { flex: 1, padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#ddd', alignItems: 'center', backgroundColor: '#fff' },
-  estadoBtnActivo: { backgroundColor: '#1a1a2e', borderColor: '#1a1a2e' },
-  estadoText: { fontSize: 13, color: '#555', fontWeight: '600' },
-  estadoTextActivo: { color: '#fff' },
-  button: { backgroundColor: '#1a1a2e', padding: 16, borderRadius: 10, alignItems: 'center', marginTop: 32 },
-  buttonText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
-})
+const usarEstilos = crearEstilos((colors) => ({
+  container: { flex: 1, backgroundColor: colors.fondo },
+  // El espacio extra abajo deja el botón de guardar alcanzable con el teclado abierto.
+  contenido: { padding: espaciado.lg, paddingBottom: espaciado.xxl + espaciado.xl },
+}))
